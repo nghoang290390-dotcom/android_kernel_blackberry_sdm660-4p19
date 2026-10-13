@@ -63,7 +63,38 @@
 		};
 	};
 };
-/* BB LED override removed - base pm660l tri-led nodes used instead */
+/*
+ * Athena RGB notification LED — perceptually-smooth breath pattern.
+ * 48-step gamma-corrected ramp at 62 ms/step (mirrors LOS22 BB tuning).
+ * Default Qualcomm 21-step linear LUT @ 100 ms/step looks stepped/laggy.
+ */
+&pm660l_lpg {
+	/* 47-entry rise-only gamma 1.8 curve. Hardware ramp-toggle auto-plays
+	 * it in reverse for the fall, doubling the per-direction resolution
+	 * compared to a rise+fall LUT in 47 slots. */
+	qcom,lut-patterns = <0 0 0 1 1 2 3 3 4 5 7 8 9 11 12 14
+			     16 17 19 21 24 26 28 31 33 36 38 41 44 47 50 53
+			     56 59 62 66 69 72 76 80 83 87 91 95 99 100 100>;
+
+	lpg1 {
+		qcom,ramp-step-ms = <32>;
+		qcom,ramp-low-index = <0>;
+		qcom,ramp-high-index = <46>;
+		qcom,ramp-toggle;
+	};
+	lpg2 {
+		qcom,ramp-step-ms = <32>;
+		qcom,ramp-low-index = <0>;
+		qcom,ramp-high-index = <46>;
+		qcom,ramp-toggle;
+	};
+	lpg3 {
+		qcom,ramp-step-ms = <32>;
+		qcom,ramp-low-index = <0>;
+		qcom,ramp-high-index = <46>;
+		qcom,ramp-toggle;
+	};
+};
 
 
 &soc {
@@ -855,6 +886,26 @@
 &i2c_6 {
 	nq@28 {
 		/delete-property/ qcom,nq-esepwr;
+		/* Only the PMIC gpio4 (CLK_REQ sense) goes in "default" so
+		 * device-core auto-applies it on probe. TLMM nfc gpios stay in
+		 * nfc_active to avoid conflicts with other drivers claiming
+		 * gpio31 (ESE) which we no longer use here.
+		 */
+		pinctrl-names = "default", "nfc_active", "nfc_suspend";
+		pinctrl-0 = <&athena_nfc_clk_biasoff>;
+		pinctrl-1 = <&nfc_int_active &nfc_enable_active>;
+		pinctrl-2 = <&nfc_int_suspend &nfc_enable_suspend>;
+	};
+};
+
+&pm660_gpios {
+	athena_nfc_clk_biasoff: athena_nfc_clk_biasoff {
+		pins = "gpio4";
+		function = "normal";
+		bias-disable;
+		input-enable;
+		output-disable;
+		power-source = <1>;
 	};
 };
 
@@ -898,15 +949,23 @@
 		};
 	};
 
-	/* MODIFIED-BEGIN by qifeng.wu, 2017-12-05,BUG-5711757*/
+	/* MODIFIED-BEGIN by qifeng.wu, 2017-12-05,BUG-5711757 (ported to qti-haptics/4.19)
+	 *
+	 * athena LRA tuning. LOS22 used qpnp-haptic which read qcom,wave-shape,
+	 * qcom,wave-play-rate-us, qcom,lra-auto-res-mode, qcom,lra-high-z. LOS23
+	 * uses qti-haptics which uses different names (qcom,play-rate-us,
+	 * qcom,lra-resonance-sig-shape, qcom,lra-auto-resonance-mode) and doesn't
+	 * honour top-level brake-pattern (per-effect qcom,wf-brake-pattern only).
+	 *
+	 * The original qcom,wave-shape = "sine" collapses into qti-haptics'
+	 * qcom,lra-resonance-sig-shape which the base pm660.dtsi already sets to
+	 * "sine", so no override needed there.
+	 */
 	qcom,pm660@1 {
 		pm660_haptics: qcom,haptic@c000 {
-			qcom,vmax-mv = <1740>;  /* change 0xC051 to 0x1e */
-			qcom,wave-shape = "sine";
-			qcom,wave-play-rate-us = <4255>;   /* change 0xC054 to 0x53，0xC055 to 0x3 */
-			qcom,brake-pattern = [02 01 00 00]; // MODIFIED by qifeng.wu, 2017-12-14,BUG-5711757
-			qcom,lra-auto-res-mode = "zxd";
-			qcom,lra-high-z = "opt1"; // MODIFIED by qifeng.wu, 2018-02-08,BUG-5968317
+			qcom,vmax-mv = <1740>;
+			qcom,play-rate-us = <4255>;
+			qcom,lra-auto-resonance-mode = "zxd";
 			/delete-property/ qcom,correct-lra-drive-freq;
 		};
 	};
@@ -998,11 +1057,16 @@
 /* MODIFIED-END by Xiaoyun.Wei,BUG-5294788*/
 
 
-/ {
-	athena_batterydata: qcom,battery-data {
-		qcom,batt-id-range-pct = <15>;
-		#include "fg-gen3-batterydata-byd-3500mah.dtsi"
-	};
+/*
+ * Extend mtp_batterydata (defined in sdm660-mtp.dtsi) with the athena BYD
+ * 3500mAh profile. Declaring a separate /qcom,battery-data at root creates a
+ * duplicate that qpnp-fg-gen3's of_find_node_by_name() picks over the one
+ * phandled from &pm660_fg, so the profile match fails. Pattern mirrors
+ * Xiaomi whyred (whyred-base.dtsi).
+ */
+&mtp_batterydata {
+	qcom,batt-id-range-pct = <15>;
+	#include "fg-gen3-batterydata-byd-3500mah.dtsi"
 };
 
 &pm660_charger {
@@ -1020,7 +1084,7 @@
 
 &pm660_fg {
 	status = "ok";
-	qcom,battery-data = <&athena_batterydata>;
+	qcom,battery-data = <&mtp_batterydata>;
 	qcom,fg-jeita-thresholds = <2 10 45 54>;
 	qcom,fg-jeita-hyst-temp = <2>;
 	qcom,fg-batt-temp-delta = <2>;

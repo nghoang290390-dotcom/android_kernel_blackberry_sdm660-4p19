@@ -475,6 +475,10 @@ static int32_t msm_flash_init(
 		}
 	}
 
+	pr_info("msm_flash_init: type from fctrl=%d, from userspace=%d, local=%d\n",
+		flash_ctrl->flash_driver_type,
+		flash_data->cfg.flash_init_info->flash_driver_type,
+		flash_driver_type);
 	if (flash_driver_type == FLASH_DRIVER_DEFAULT) {
 		pr_err("%s:%d invalid flash_driver_type\n", __func__, __LINE__);
 		return -EINVAL;
@@ -624,6 +628,10 @@ static int32_t msm_flash_low(
 	for (i = 0; i < flash_ctrl->flash_num_sources; i++)
 		if (flash_ctrl->flash_trigger[i])
 			led_trigger_event(flash_ctrl->flash_trigger[i], 0);
+#ifdef CONFIG_MACH_ASUS_SDM660
+	if (flash_ctrl->switch_trigger)
+		led_trigger_event(flash_ctrl->switch_trigger, 0);
+#endif
 
 	/* Turn on flash triggers */
 	for (i = 0; i < flash_ctrl->torch_num_sources; i++) {
@@ -661,6 +669,10 @@ static int32_t msm_flash_high(
 	for (i = 0; i < flash_ctrl->torch_num_sources; i++)
 		if (flash_ctrl->torch_trigger[i])
 			led_trigger_event(flash_ctrl->torch_trigger[i], 0);
+#ifdef CONFIG_MACH_ASUS_SDM660
+	if (flash_ctrl->switch_trigger)
+		led_trigger_event(flash_ctrl->switch_trigger, 0);
+#endif
 
 	/* Turn on flash triggers */
 	for (i = 0; i < flash_ctrl->flash_num_sources; i++) {
@@ -1150,7 +1162,7 @@ static int32_t msm_flash_get_dt_data(struct device_node *of_node,
 
 	if (fctrl->flash_driver_type == FLASH_DRIVER_DEFAULT)
 		fctrl->flash_driver_type = FLASH_DRIVER_GPIO;
-	CDBG("%s:%d fctrl->flash_driver_type = %d", __func__, __LINE__,
+	pr_info("msm_flash: probe done flash_driver_type = %d\n",
 		fctrl->flash_driver_type);
 
 	return rc;
@@ -1247,7 +1259,8 @@ static int32_t msm_flash_platform_probe(struct platform_device *pdev)
 	struct msm_flash_ctrl_t *flash_ctrl = NULL;
 	struct msm_camera_cci_client *cci_client = NULL;
 
-	CDBG("Enter");
+	pr_info("msm_flash_platform_probe ENTER node=%s\n",
+		pdev->dev.of_node ? pdev->dev.of_node->name : "NULL");
 	if (!pdev->dev.of_node) {
 		pr_err("of_node NULL\n");
 		return -EINVAL;
@@ -1299,7 +1312,7 @@ static int32_t msm_flash_platform_probe(struct platform_device *pdev)
 		ARRAY_SIZE(flash_ctrl->msm_sd.sd.name),
 		"msm_camera_flash");
 	media_entity_pads_init(&flash_ctrl->msm_sd.sd.entity, 0, NULL);
-	flash_ctrl->msm_sd.sd.entity.function = MSM_CAMERA_SUBDEV_FLASH;
+	flash_ctrl->msm_sd.sd.entity.group_id = MSM_CAMERA_SUBDEV_FLASH;
 	flash_ctrl->msm_sd.close_seq = MSM_SD_CLOSE_2ND_CATEGORY | 0x1;
 	msm_sd_register(&flash_ctrl->msm_sd);
 

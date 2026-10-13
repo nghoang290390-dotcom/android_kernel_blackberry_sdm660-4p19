@@ -373,6 +373,7 @@ static int msm_csid_config(struct csid_device *csid_dev,
 		return -EINVAL;
 	}
 
+#if 0
 	if (csid_params->is_secure == 1) {
 		struct scm_desc desc = {0};
 
@@ -390,6 +391,7 @@ static int msm_csid_config(struct csid_device *csid_dev,
 		}
 		msm_camera_tz_clear_tzbsp_status();
 	}
+#endif
 
 	csid_dev->csid_lane_cnt = csid_params->lane_cnt;
 	rc = msm_csid_reset(csid_dev);
@@ -401,7 +403,8 @@ static int msm_csid_config(struct csid_device *csid_dev,
 	if (!msm_csid_find_max_clk_rate(csid_dev))
 		pr_err("msm_csid_find_max_clk_rate failed\n");
 
-	clk_rate = csid_dev->csid_max_clk;
+	clk_rate = (csid_params->csi_clk > 0) ?
+				(csid_params->csi_clk) : csid_dev->csid_max_clk;
 
 	clk_rate = msm_camera_clk_set_rate(&csid_dev->pdev->dev,
 		csid_dev->csid_clk[csid_dev->csid_clk_index], clk_rate);
@@ -753,6 +756,7 @@ static int msm_csid_release(struct csid_device *csid_dev)
 	CDBG("%s:%d, hw_version = 0x%x\n", __func__, __LINE__,
 		csid_dev->hw_version);
 
+#if 0
 	if (csid_dev->current_csid_params.is_secure == 1) {
 		struct scm_desc desc = {0};
 
@@ -768,6 +772,7 @@ static int msm_csid_release(struct csid_device *csid_dev)
 		}
 		msm_camera_tz_clear_tzbsp_status();
 	}
+#endif
 
 	irq = msm_camera_vio_r(csid_dev->base,
 		csid_dev->ctrl_reg->csid_reg.csid_irq_status_addr,
@@ -1006,7 +1011,9 @@ static int32_t msm_csid_cmd32(struct csid_device *csid_dev, void *arg)
 		csid_params.phy_sel = csid_params32.phy_sel;
 		csid_params.csi_clk = csid_params32.csi_clk;
 		csid_params.csi_3p_sel = csid_params32.csi_3p_sel;
+#if 0
 		csid_params.is_secure = csid_params32.is_secure;
+#endif
 
 		lut_par32 = csid_params32.lut_params;
 		csid_params.lut_params.num_cid = lut_par32.num_cid;
@@ -1223,7 +1230,7 @@ static int csid_probe(struct platform_device *pdev)
 	snprintf(new_csid_dev->msm_sd.sd.name,
 			ARRAY_SIZE(new_csid_dev->msm_sd.sd.name), "msm_csid");
 	media_entity_pads_init(&new_csid_dev->msm_sd.sd.entity, 0, NULL);
-	new_csid_dev->msm_sd.sd.entity.function = MSM_CAMERA_SUBDEV_CSID;
+	new_csid_dev->msm_sd.sd.entity.group_id = MSM_CAMERA_SUBDEV_CSID;
 	new_csid_dev->msm_sd.close_seq = MSM_SD_CLOSE_2ND_CATEGORY | 0x5;
 	msm_sd_register(&new_csid_dev->msm_sd);
 

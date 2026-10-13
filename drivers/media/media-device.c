@@ -117,9 +117,9 @@ static long media_device_enum_entities(struct media_device *mdev, void *arg)
 	if (ent->name)
 		strlcpy(entd->name, ent->name, sizeof(entd->name));
 	entd->type = ent->function;
-	entd->revision = 0;		/* Unused */
+	entd->revision = ent->revision;
 	entd->flags = ent->flags;
-	entd->group_id = 0;		/* Unused */
+	entd->group_id = ent->group_id;
 	entd->pads = ent->num_pads;
 	entd->links = ent->num_links - ent->num_backlinks;
 
@@ -134,8 +134,14 @@ static long media_device_enum_entities(struct media_device *mdev, void *arg)
 	 * printing the graphviz diagram. So, map them into the devnode
 	 * old range.
 	 */
-	if (ent->function < MEDIA_ENT_F_OLD_BASE ||
-	    ent->function > MEDIA_ENT_F_TUNER) {
+	/*
+	 * Only remap when the driver explicitly left function as UNKNOWN.
+	 * This preserves custom small-int function values used by msm
+	 * camera_v2-legacy subdevs (MSM_CAMERA_SUBDEV_FLASH = 16, etc.)
+	 * so BB OREO mm-camera userspace can identify them by type.
+	 */
+	if (ent->function == MEDIA_ENT_F_V4L2_SUBDEV_UNKNOWN ||
+	    ent->function == MEDIA_ENT_F_UNKNOWN) {
 		if (is_media_entity_v4l2_subdev(ent))
 			entd->type = MEDIA_ENT_F_V4L2_SUBDEV_UNKNOWN;
 		else if (ent->function != MEDIA_ENT_F_IO_V4L)
@@ -637,6 +643,11 @@ int __must_check media_device_register_entity(struct media_device *mdev,
 	/* Initialize media_gobj embedded at the entity */
 	media_gobj_create(mdev, MEDIA_GRAPH_ENTITY, &entity->graph_obj);
 
+	if (entity->id == 0)
+		entity->id = mdev->entity_id++;
+	else
+		mdev->entity_id = max(entity->id + 1, mdev->entity_id);
+
 	/* Initialize objects at the pads */
 	for (i = 0; i < entity->num_pads; i++)
 		media_gobj_create(mdev, MEDIA_GRAPH_PAD,
@@ -727,6 +738,7 @@ int __must_check __media_device_register(struct media_device *mdev,
 		return -ENOMEM;
 
 	/* Register the device node. */
+	mdev->entity_id = 1;
 	mdev->devnode = devnode;
 	devnode->fops = &media_device_fops;
 	devnode->parent = mdev->dev;
